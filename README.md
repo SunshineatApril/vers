@@ -8,6 +8,9 @@
 让用户最大程度地忽略版本管理的过程。用户对版本管理的诉求只有两点：备份，记录文件演变，达成如此简单的目的，用户的必要操作只有下载最新文件和提交，其他所有的管理工作应该由版本管理工具完成，不应该被用户感知到。也就是说，用户使用vers完成版本管理，只需要懂得两个命令：vers dowload和vers upload，下载和上传，就可以查看文件的演变历程。如果用户想要把文件切换到历史版本，才要用到额外的命令：vers goto。
 
 ## vers基本特征
+
+![image](https://github.com/user-attachments/assets/e2f44c77-33fb-429a-863d-9ab0cf057f9f)
+
 1. **保留git本地仓和远程仓概念**<br/>
 本地仓表示文件在当前设备上的备份，修改中的版本（editing version）；远程仓表示文件的一个正式版本（official version），1个或多个持有editing version的用户，每完成1次vers upload后，形成新的official version。
 2. **取消本地仓的暂存区和版本库**<br/>
