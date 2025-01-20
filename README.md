@@ -9,8 +9,7 @@
 
 ## vers基本特征
 
-![image](https://github.com/user-attachments/assets/370a1513-bf80-4add-88b8-f76bb5995190)
-
+![image](https://github.com/user-attachments/assets/c55a2854-713b-44eb-829d-ed6c62b6faff)
 
 1. **保留git本地仓和远程仓概念**<br/>
 本地仓表示文件在当前设备上的备份，修改中的版本（editing version）；远程仓表示文件的一个正式版本（official version），1个或多个持有editing version的用户，每完成1次vers upload后，形成新的official version。
