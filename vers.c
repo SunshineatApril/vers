@@ -33,7 +33,7 @@ static void ExtractRepoName(const char *url, char *out, size_t size) {
 static int LoadCommitLog(const char *repo_dir) {
     char cmd[1024];
     snprintf(cmd, sizeof(cmd),
-        "git -C \"%s\" log --pretty=format:\"%%H\\t%%an\\t%%ad\\t%%s\" --date=short 2>/dev/null",
+        "git -C \"%s\" log --pretty=format:\"%%H\\t%%an\\t%%ad\\t%%s\" --date=short 2>nul",
         repo_dir);
 
     FILE *fp = popen(cmd, "r");
@@ -62,6 +62,49 @@ static int LoadCommitLog(const char *repo_dir) {
     return commit_count;
 }
 
+// 将全局 commit_log[] 保存到文件（TSV 格式）
+static int SaveCommitLog(const char *path) {
+    FILE *f = fopen(path, "w");
+    if (!f) { perror(path); return -1; }
+    for (int i = 0; i < commit_count; i++) {
+        fprintf(f, "%s\t%s\t%s\t%s\n",
+            commit_log[i].hash,
+            commit_log[i].author,
+            commit_log[i].date,
+            commit_log[i].message);
+    }
+    fclose(f);
+    return 0;
+}
+
+// 从文件加载 commit_log[]（TSV 格式）
+static int LoadCommitLogFile(const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+
+    commit_count = 0;
+    char line[HASH_LEN + AUTHOR_LEN + DATE_LEN + MSG_LEN + 8];
+    while (fgets(line, sizeof(line), f) && commit_count < MAX_COMMITS) {
+        line[strcspn(line, "\n")] = '\0';
+
+        char *hash   = strtok(line, "\t");
+        char *author = strtok(NULL, "\t");
+        char *date   = strtok(NULL, "\t");
+        char *msg    = strtok(NULL, "\t");
+
+        if (!hash) continue;
+
+        strncpy(commit_log[commit_count].hash,    hash,                HASH_LEN   - 1);
+        strncpy(commit_log[commit_count].author,  author ? author : "", AUTHOR_LEN - 1);
+        strncpy(commit_log[commit_count].date,    date   ? date   : "", DATE_LEN   - 1);
+        strncpy(commit_log[commit_count].message, msg    ? msg    : "", MSG_LEN    - 1);
+        commit_count++;
+    }
+
+    fclose(f);
+    return commit_count;
+}
+
 // ── 子命令函数 ───────────────────────────────────────────────────
 static int CmdDownload(const char *url) {
     char cmd[1024];
@@ -75,6 +118,10 @@ static int CmdDownload(const char *url) {
 
     int n = LoadCommitLog(repo_name);
     if (n > 0) {
+        char log_path[512];
+        snprintf(log_path, sizeof(log_path), "commit.log", repo_name);
+        SaveCommitLog(log_path);
+
         printf("Loaded %d commits from '%s':\n", n, repo_name);
         int preview = n < 5 ? n : 5;
         for (int i = 0; i < preview; i++) {
@@ -96,7 +143,7 @@ static int CmdUpload(const char *message) {
     if (ret != 0) return ret;
 
     // 检查相对远程分支是否已有 1 个或以上未推送的 commit
-    FILE *fp = popen("git rev-list @{u}..HEAD --count 2>/dev/null", "r");
+    FILE *fp = popen("git rev-list @{u}..HEAD --count 2>nul", "r");
     int ahead = 0;
     if (fp) {
         fscanf(fp, "%d", &ahead);
@@ -113,7 +160,7 @@ static int CmdUpload(const char *message) {
     if (ret != 0) return ret;
 
     // 提交成功后，读取最新 commit 信息更���全局 commit_log
-    FILE *lp = popen("git log -1 --pretty=format:\"%H\\t%an\\t%ad\\t%s\" --date=short 2>/dev/null", "r");
+    FILE *lp = popen("git log -1 --pretty=format:\"%H\\t%an\\t%ad\\t%s\" --date=short 2>nul", "r");
     if (lp) {
         char line[HASH_LEN + AUTHOR_LEN + DATE_LEN + MSG_LEN + 8];
         if (fgets(line, sizeof(line), lp)) {
@@ -145,6 +192,9 @@ static int CmdUpload(const char *message) {
         pclose(lp);
     }
 
+    // 更新持久化文件
+    SaveCommitLog("commit.log");
+
     return 0;
 }
 
@@ -160,6 +210,12 @@ static void PrintCommits(int from, int to) {
 }
 
 static int CmdGoto(const char *commit_id) {
+    // 从持久化文件加载 commit 历史
+    if (LoadCommitLogFile("commit.log") < 0 && commit_count == 0) {
+        fprintf(stderr, "No commit history found. Run 'vers download' first.\n");
+        return 1;
+    }
+
     // 未传入 commit_id：展示 commit 列表供用户选择
     if (!commit_id) {
         if (commit_count == 0) {
@@ -184,7 +240,7 @@ static int CmdGoto(const char *commit_id) {
     }
 
     // 检测工作区是否有未提交的修改
-    FILE *fp = popen("git status --porcelain 2>/dev/null", "r");
+    FILE *fp = popen("git status --porcelain 2>nul", "r");
     int has_changes = 0;
     if (fp) {
         char buf[4];
